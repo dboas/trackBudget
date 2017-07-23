@@ -481,7 +481,7 @@ global tB
 global grants
 global personnel
 
-prompt = {'Enter grant name:','Account Number','Funding Agency','Grant Number','Start Date','End Date','Period End Date','Overhead Rate'};
+prompt = {'Enter grant name:','Account Number','Funding Agency','Grant Number','Start Date','End Date','Period End Date','Overhead Rate (e.g. 0.71)'};
 dlg_title = 'New Grant';
 num_lines = 1;
 def = {'','','','','','','',''};
@@ -504,6 +504,7 @@ grants(tB.nGrants).overheadRate = myStr2num( answer{8} );
 grants(tB.nGrants).idxPI = 1;
 grants(tB.nGrants).personnelRange = [1 7];
 grants(tB.nGrants).active = 1;
+grants(tB.nGrants).personnel = [];
 
 % grants(tB.nGrants).budget(1).notes = '';
 
@@ -574,6 +575,7 @@ personnel(tB.idxPeople).salary_covered((iY*12+iM):end) = myStr2num(answer{5});
 sortPeopleList( handles );
 
 updatePeople( handles );
+updateGrants( handles );
 
 updateSaveFileFlag( handles );
 
@@ -637,6 +639,7 @@ if tB.idxGrant>0
         eval( sprintf('set(handles.editIncomeDesc%d,''enable'',''off'')',ii) )
     end
     
+    if isfield(grants,'budget')
     if ~isempty( grants(tB.idxGrant).budget )
         set(handles.editBudgetUpdateNotes,'string', grants(tB.idxGrant).budget(end).notes )
 
@@ -704,6 +707,7 @@ if tB.idxGrant>0
             end            
         end
         
+    end
     end
 else
     set(handles.editGrantAcctNum,'string','')
