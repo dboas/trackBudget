@@ -22,7 +22,7 @@ function varargout = trackBudget(varargin)
 
 % Edit the above text to modify the response to help trackBudget
 
-% Last Modified by GUIDE v2.5 10-Jul-2016 14:35:08
+% Last Modified by GUIDE v2.5 19-Apr-2018 09:50:53
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -481,7 +481,7 @@ global tB
 global grants
 global personnel
 
-prompt = {'Enter grant name:','Account Number','Funding Agency','Grant Number','Start Date','End Date','Period End Date','Overhead Rate (e.g. 0.71)'};
+prompt = {'Enter grant name:','Account Number','Funding Agency','Grant Number','Start Date','End Date','Period End Date','Overhead Rate'};
 dlg_title = 'New Grant';
 num_lines = 1;
 def = {'','','','','','','',''};
@@ -504,7 +504,6 @@ grants(tB.nGrants).overheadRate = myStr2num( answer{8} );
 grants(tB.nGrants).idxPI = 1;
 grants(tB.nGrants).personnelRange = [1 7];
 grants(tB.nGrants).active = 1;
-grants(tB.nGrants).personnel = [];
 
 % grants(tB.nGrants).budget(1).notes = '';
 
@@ -575,7 +574,6 @@ personnel(tB.idxPeople).salary_covered((iY*12+iM):end) = myStr2num(answer{5});
 sortPeopleList( handles );
 
 updatePeople( handles );
-updateGrants( handles );
 
 updateSaveFileFlag( handles );
 
@@ -639,7 +637,6 @@ if tB.idxGrant>0
         eval( sprintf('set(handles.editIncomeDesc%d,''enable'',''off'')',ii) )
     end
     
-    if isfield(grants,'budget')
     if ~isempty( grants(tB.idxGrant).budget )
         set(handles.editBudgetUpdateNotes,'string', grants(tB.idxGrant).budget(end).notes )
 
@@ -707,7 +704,6 @@ if tB.idxGrant>0
             end            
         end
         
-    end
     end
 else
     set(handles.editGrantAcctNum,'string','')
@@ -1113,7 +1109,7 @@ GL_total = grants(tB.idxGrant).budget(end).balance.GL_total;
 
 dateNew = datenum( grants(tB.idxGrant).budget(end).date ,'mm/dd/yy');
 iY = str2num(datestr(dateNew,'yy'));
-iM = str2num(datestr(dateNew,'mm')) + 1; % GL post includes the entire month. So base our calculations starting with next month, i.e. +1
+iM = str2num(datestr(dateNew,'mm')); % GL post includes the entire month. So base our calculations starting with next month, i.e. +1
 iYg = str2num( grants(tB.idxGrant).date_start((end-1):end) );
 iMg = str2num( grants(tB.idxGrant).date_start(1:2) );
 iMonthOfGrant0 = iY*12 + iM - iYg*12 - iMg + 1;
@@ -2094,18 +2090,27 @@ short = [];
 expected = [];
 paid = [];
 fringe_rate = [];
+ii = 0;
 for iPerson = 1:length(personnel)
-    d{iPerson,1} = personnel(iPerson).name;
-    
-    short(iPerson) = sum(personnel(iPerson).salary_covered(lstMonths))/12 - ...
-        sum(sum(personnel(iPerson).salaryByGrant(:,lstMonths)))/12;
-    expected(iPerson) = sum(personnel(iPerson).salary_covered(lstMonths))/12;
-    paid(iPerson) = sum(sum(personnel(iPerson).salaryByGrant(:,lstMonths)))/12;
-    fringe_rate(iPerson) = mean( personnel(iPerson).fringe_rate(lstMonths) );
-    
-    d{iPerson,2} = sprintf('          %.0f',short(iPerson));
-    d{iPerson,3} = sprintf('          %.0f',expected(iPerson) );
-    d{iPerson,4} = sprintf('          %.0f',paid(iPerson) );
+    if personnel(iPerson).primaryList==1
+        ii = ii + 1;
+        
+        if personnel(iPerson).salary_covered(lstMonths(end))>0
+            d{ii,1} = personnel(iPerson).name;
+        else
+            d{ii,1} = sprintf('%s ***',personnel(iPerson).name);
+        end
+        
+        short(ii) = sum(personnel(iPerson).salary_covered(lstMonths))/12 - ...
+            sum(sum(personnel(iPerson).salaryByGrant(:,lstMonths)))/12;
+        expected(ii) = sum(personnel(iPerson).salary_covered(lstMonths))/12;
+        paid(ii) = sum(sum(personnel(iPerson).salaryByGrant(:,lstMonths)))/12;
+        fringe_rate(ii) = mean( personnel(iPerson).fringe_rate(lstMonths) );
+        
+        d{ii,2} = sprintf('          %.0f',short(ii));
+        d{ii,3} = sprintf('          %.0f',expected(ii) );
+        d{ii,4} = sprintf('          %.0f',paid(ii) );
+    end
 end
 
 [foo,lstOrder] = sort(abs(short),'descend');
@@ -2193,42 +2198,47 @@ surplusDirect = [];
 surplusTotal = [];
 cnames = {'Grant'};
 cwid = {150};
+iGrant_idx = 0;
 for iGrant = 1:tB.nGrants
 
-    iYg = str2num( grants(iGrant).date_start((end-1):end) );
-    iMg = str2num( grants(iGrant).date_start(1:2) );
-    iDateG = iYg*12 + iMg;
-    
-    iYgbpe = str2num( grants(iGrant).date_end_budget_period((end-1):end) );
-    iMgbpe = str2num( grants(iGrant).date_end_budget_period(1:2) );
-    iDateBPE = iYgbpe*12 + iMgbpe;
-    
-    d1{iGrant,1} = [grants(iGrant).name ' - ' grants(iGrant).acct_number];
-    d2{iGrant,1} = [grants(iGrant).name ' - ' grants(iGrant).acct_number];
-    
-    for iQ = 1:8
-        iDate = iY*12 + iM + (iQ-1)*3;
+    if grants(iGrant).active==1
+        iGrant_idx = iGrant_idx + 1;
         
-        if iGrant==1
-            cnames{end+1} = sprintf('%02d/%02d', mod(iM+(iQ-1)*3-1,12)+1, iY+floor( (iM+(iQ-1)*3-1)/12 ) );
-            cwid{end+1} = 75;
-        end
-
-        if iDate>iDateBPE
-            iDateBPE = iDateBPE + 12;
-        end
-
-        idx = iDateBPE - iDateG + 1;
+        iYg = str2num( grants(iGrant).date_start((end-1):end) );
+        iMg = str2num( grants(iGrant).date_start(1:2) );
+        iDateG = iYg*12 + iMg;
         
-        if idx<=length( grants(iGrant).budget(end).balance.projected_GL_direct )
-            surplusDirect(iGrant,iQ) = grants(iGrant).budget(end).balance.projected_GL_direct( idx );
-            d1{iGrant,iQ+1} = sprintf( '%.0f', surplusDirect(iGrant,iQ) );
+        iYgbpe = str2num( grants(iGrant).date_end_budget_period((end-1):end) );
+        iMgbpe = str2num( grants(iGrant).date_end_budget_period(1:2) );
+        iDateBPE = iYgbpe*12 + iMgbpe;
+        
+        d1{iGrant_idx,1} = [grants(iGrant).name ' - ' grants(iGrant).acct_number];
+        d2{iGrant_idx,1} = [grants(iGrant).name ' - ' grants(iGrant).acct_number];
+        
+        for iQ = 1:8
+            iDate = iY*12 + iM + (iQ-1)*3;
             
-            surplusTotal(iGrant,iQ) = grants(iGrant).budget(end).balance.projected_GL_total( idx );
-            d2{iGrant,iQ+1} = sprintf( '%.0f', surplusTotal(iGrant,iQ) );
-        else
-            d1{iGrant,iQ+1} = '';
-            d2{iGrant,iQ+1} = '';
+            if iGrant_idx==1
+                cnames{end+1} = sprintf('%02d/%02d', mod(iM+(iQ-1)*3-1,12)+1, iY+floor( (iM+(iQ-1)*3-1)/12 ) );
+                cwid{end+1} = 75;
+            end
+            
+            if iDate>iDateBPE
+                iDateBPE = iDateBPE + 12;
+            end
+            
+            idx = iDateBPE - iDateG + 1;
+            
+            if idx<=length( grants(iGrant).budget(end).balance.projected_GL_direct )
+                surplusDirect(iGrant_idx,iQ) = grants(iGrant).budget(end).balance.projected_GL_direct( idx );
+                d1{iGrant_idx,iQ+1} = sprintf( '%.0f', surplusDirect(iGrant_idx,iQ) );
+                
+                surplusTotal(iGrant_idx,iQ) = grants(iGrant).budget(end).balance.projected_GL_total( idx );
+                d2{iGrant_idx,iQ+1} = sprintf( '%.0f', surplusTotal(iGrant_idx,iQ) );
+            else
+                d1{iGrant_idx,iQ+1} = '';
+                d2{iGrant_idx,iQ+1} = '';
+            end
         end
     end
     
@@ -2335,7 +2345,7 @@ foos = datestr(now,'mm/yy');
 iM = str2num(foos(1:2));
 iY = str2num(foos(4:5));
 
-reportSalaryPersonByGrant.iMonth = iY*12 + iM;
+reportSalaryPersonByGrant.iMonth = iY*12 + iM - 1;
 
 trackBudget_displaySalaryPersonByGrantPerMonth( [], [] );
 
@@ -2651,5 +2661,3 @@ global grants
 
 grants(tB.idxGrant).active = get(handles.checkboxGrantActive,'value');
 updateSaveFileFlag( handles )
-
-
